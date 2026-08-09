@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoVision AI - Captured Records Table</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <!-- TOP NAVIGATION BAR -->
+        <header class="app-header glass-card">
+            <div class="brand">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-car-rear"></i>
+                    <span class="pulse-ring"></span>
+                </div>
+                <div class="brand-text">
+                    <h1>AUTOVISION <span class="accent-text">AI</span></h1>
+                    <p class="subtitle">Detection Records & Asset Export Table</p>
+                </div>
+            </div>
+
+            <div class="nav-links">
+                <a href="/" class="nav-btn"><i class="fa-solid fa-gauge-high"></i> Live Viewport</a>
+                <a href="/table" class="nav-btn active"><i class="fa-solid fa-table-cells"></i> Records Table</a>
+            </div>
+
+            <div class="system-status-pills">
+                <div class="status-pill active">
+                    <span class="status-dot"></span>
+                    <span id="totalRecordsBadge">0 Records</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- TABLE TOOLBAR & EXPORT DOCK -->
+        <section class="table-toolbar glass-card">
+            <!-- SEARCH FILTER -->
+            <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="searchInput" placeholder="Search plate text, timestamp, or ID..." onkeyup="filterTableRecords()">
+            </div>
+
+            <!-- BATCH ACTION CONTROLS -->
+            <div class="toolbar-actions">
+                <div class="selection-pill" id="selectionPill">0 Selected</div>
+
+                <!-- SAVE OPTIONS DROPDOWN -->
+                <div class="dropdown">
+                    <button class="btn btn-primary dropdown-toggle">
+                        <i class="fa-solid fa-download"></i> Save Selected <i class="fa-solid fa-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu">
+                        <a href="#" onclick="exportSelected('all')"><i class="fa-solid fa-file-zipper"></i> Save Both (Car + Plate Zip)</a>
+                        <a href="#" onclick="exportSelected('car_only')"><i class="fa-solid fa-car"></i> Save Only Car Images</a>
+                        <a href="#" onclick="exportSelected('plate_only')"><i class="fa-solid fa-rectangle-ad"></i> Save Only Plate Crops</a>
+                    </div>
+                </div>
+
+                <!-- SAVE ALL AT ONCE BUTTON -->
+                <div class="dropdown">
+                    <button class="btn btn-success dropdown-toggle">
+                        <i class="fa-solid fa-box-archive"></i> Save All at Once <i class="fa-solid fa-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu">
+                        <a href="/api/snapshots/export_zip?mode=all"><i class="fa-solid fa-file-zipper"></i> Download All (Both Images Zip)</a>
+                        <a href="/api/snapshots/export_zip?mode=car_only"><i class="fa-solid fa-car"></i> Download All (Car Images Only)</a>
+                        <a href="/api/snapshots/export_zip?mode=plate_only"><i class="fa-solid fa-rectangle-ad"></i> Download All (Plate Crops Only)</a>
+                    </div>
+                </div>
+
+                <button class="btn btn-danger" onclick="deleteSelectedRecords()">
+                    <i class="fa-solid fa-trash-can"></i> Delete Selected
+                </button>
+
+                <button class="btn btn-secondary" onclick="clearAllTableRecords()">
+                    <i class="fa-solid fa-broom"></i> Clear All
+                </button>
+            </div>
+        </section>
+
+        <!-- TABLE SECTION -->
+        <section class="table-container-section glass-card">
+            <div class="table-responsive">
+                <table class="records-table">
+                    <thead>
+                        <tr>
+                            <th width="40">
+                                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)">
+                            </th>
+                            <th width="140">Car Image</th>
+                            <th width="130">License Crop</th>
+                            <th>License Plate Text</th>
+                            <th>Confidence</th>
+                            <th>Captured Timestamp</th>
+                            <th width="240">Save & View Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- DYNAMIC ROW INJECTION -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- EMPTY TABLE STATE -->
+            <div class="empty-table-state" id="emptyTableState" style="display: none;">
+                <i class="fa-solid fa-folder-open"></i>
+                <h3>No Detection Records Found</h3>
+                <p>Start live video or camera detection to generate vehicle snapshot records.</p>
+            </div>
+        </section>
+    </div>
+
+    <!-- SNAPSHOT DETAIL MODAL -->
+    <div class="modal-backdrop" id="snapshotModal" onclick="closeModal(event)">
+        <div class="modal-card glass-card" onclick="event.stopPropagation()">
+            <button class="modal-close-btn" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="modal-title"><i class="fa-solid fa-id-card"></i> Vehicle & License Details</h3>
+            
+            <div class="modal-body">
+                <div class="modal-image-box">
+                    <h4><i class="fa-solid fa-car"></i> Vehicle Snapshot</h4>
+                    <img id="modalCarImg" src="" alt="Car Image">
+                </div>
+                <div class="modal-image-box">
+                    <h4><i class="fa-solid fa-rectangle-ad"></i> Zoomed License Plate</h4>
+                    <img id="modalPlateImg" src="" alt="Plate Crop">
+                    <div class="plate-text-display" id="modalPlateText">---</div>
+                </div>
+            </div>
+
+            <div class="modal-meta">
+                <div><strong>Captured At:</strong> <span id="modalTimestamp"></span></div>
+                <div><strong>Confidence:</strong> Car <span id="modalCarConf"></span>%, Plate <span id="modalPlateConf"></span>%</div>
+            </div>
+
+            <div class="modal-footer">
+                <a id="modalDownloadCar" download class="btn btn-primary"><i class="fa-solid fa-download"></i> Save Only Car</a>
+                <a id="modalDownloadPlate" download class="btn btn-secondary"><i class="fa-solid fa-download"></i> Save Only Plate</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- TABLE SCRIPT -->
+    <script src="{{ url_for('static', filename='js/table.js') }}"></script>
+</body>
+</html>

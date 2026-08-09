@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoVision AI - Real-time Vehicle & License Plate Detection</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2">
+</head>
+<body>
+    <div class="app-container">
+        <!-- TOP NAVIGATION BAR -->
+        <header class="app-header glass-card">
+            <div class="brand">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-car-rear"></i>
+                    <span class="pulse-ring"></span>
+                </div>
+                <div class="brand-text">
+                    <h1>AUTOVISION <span class="accent-text">AI</span></h1>
+                    <p class="subtitle">License Plate & Vehicle Detection Suite</p>
+                </div>
+            </div>
+
+            <div class="nav-links">
+                <a href="/" class="nav-btn active"><i class="fa-solid fa-gauge-high"></i> Live Viewport</a>
+                <a href="/table" class="nav-btn"><i class="fa-solid fa-table-cells"></i> Records Table</a>
+            </div>
+
+            <div class="system-status-pills">
+                <div class="status-pill active">
+                    <span class="status-dot"></span>
+                    <span id="engineStatusText">AI ENGINE READY</span>
+                </div>
+                <div class="status-pill info">
+                    <i class="fa-solid fa-microchip"></i>
+                    <span>YOLOv8 (best.pt)</span>
+                </div>
+                <div class="status-pill fps-pill">
+                    <i class="fa-solid fa-bolt"></i>
+                    <span id="fpsCounter">00 FPS</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN DASHBOARD CONTENT -->
+        <main class="dashboard-grid">
+            
+            <!-- LEFT COLUMN: STREAM & HUD CONTROLS -->
+            <section class="viewport-section glass-card">
+                
+                <!-- SOURCE MODE SWITCHER TABS -->
+                <div class="mode-tabs">
+                    <button class="tab-btn active" id="tabVideo" onclick="switchSourceMode('video')">
+                        <i class="fa-solid fa-file-video"></i> Video Stream
+                    </button>
+                    <button class="tab-btn" id="tabWebcam" onclick="switchSourceMode('webcam')">
+                        <i class="fa-solid fa-camera"></i> Live Camera
+                    </button>
+                    <button class="tab-btn" id="tabImage" onclick="switchSourceMode('image')">
+                        <i class="fa-solid fa-image"></i> Photo Test
+                    </button>
+                </div>
+
+                <!-- HUD VIEWPORT CONTAINER -->
+                <div class="viewport-container" id="viewportContainer">
+                    
+                    <!-- VIDEO ELEMENT (For Sample or Uploaded Video) -->
+                    <video id="videoElement" crossorigin="anonymous" playsinline loop muted></video>
+
+                    <!-- STATIC IMAGE DISPLAY (For Uploaded Image Test) -->
+                    <img id="staticImageElement" style="display: none; position: absolute; top:0; left:0; width:100%; height:100%; object-fit: fill;" alt="Test Image">
+
+                    <!-- WEBCAM BUFFER CANVAS (Hidden) -->
+                    <canvas id="webcamBufferCanvas" style="display: none;"></canvas>
+
+                    <!-- OVERLAY CANVAS (For Neon Bboxes & Reticle) -->
+                    <canvas id="overlayCanvas"></canvas>
+
+                    <!-- HUD OVERLAY BADGES -->
+                    <div class="hud-overlay top-left">
+                        <div class="hud-badge mode-badge" id="hudModeBadge">
+                            <i class="fa-solid fa-circle-dot"></i> MODE: VIDEO STREAM
+                        </div>
+                        <div class="hud-badge target-badge" id="hudTargetBadge">
+                            <i class="fa-solid fa-crosshairs"></i> SCANNING ROADWAY...
+                        </div>
+                    </div>
+
+                    <div class="hud-overlay top-right">
+                        <div class="hud-stat">
+                            <span class="hud-label">CARS DETECTED</span>
+                            <span class="hud-val cyan" id="hudCarCount">0</span>
+                        </div>
+                        <div class="hud-stat">
+                            <span class="hud-label">PLATES DETECTED</span>
+                            <span class="hud-val emerald" id="hudPlateCount">0</span>
+                        </div>
+                    </div>
+
+                    <div class="hud-overlay bottom-left">
+                        <div class="capture-flash-notice" id="captureFlashNotice">
+                            <i class="fa-solid fa-camera"></i> VEHICLE & PLATE CAPTURED!
+                        </div>
+                    </div>
+
+                    <!-- HUD RETICLE CROSSHAIR -->
+                    <div class="hud-reticle">
+                        <div class="reticle-corner top-l"></div>
+                        <div class="reticle-corner top-r"></div>
+                        <div class="reticle-corner bot-l"></div>
+                        <div class="reticle-corner bot-r"></div>
+                    </div>
+                </div>
+
+                <!-- CONTROL DOCK -->
+                <div class="control-dock">
+                    
+                    <!-- MAIN CONTROLS -->
+                    <div class="control-group" id="videoControlsGroup">
+                        <button class="btn btn-primary" id="btnPlayPause" onclick="togglePlayPause()">
+                            <i class="fa-solid fa-play"></i> <span id="lblPlayPause">Play</span>
+                        </button>
+                        <button class="btn btn-secondary" onclick="loadSampleVideo()">
+                            <i class="fa-solid fa-film"></i> Sample Video
+                        </button>
+                        <label class="btn btn-secondary upload-btn">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Upload Video
+                            <input type="file" id="videoFileInput" accept="video/*" onchange="handleVideoUpload(event)" style="display:none;">
+                        </label>
+                        <label class="btn btn-primary upload-btn" style="background: linear-gradient(135deg, #00f2fe, #4facfe); color: #050b14; font-weight: 700;">
+                            <i class="fa-solid fa-image"></i> Upload Photo
+                            <input type="file" id="directImageFileInput" accept="image/*" onchange="handleDirectImageUpload(event)" style="display:none;">
+                        </label>
+                    </div>
+
+                    <!-- WEBCAM CONTROLS -->
+                    <div class="control-group" id="webcamControlsGroup" style="display: none;">
+                        <button class="btn btn-success" id="btnStartWebcam" onclick="startWebcam()">
+                            <i class="fa-solid fa-video"></i> Start Camera
+                        </button>
+                        <button class="btn btn-danger" id="btnStopWebcam" onclick="stopWebcam()" disabled>
+                            <i class="fa-solid fa-video-slash"></i> Stop Camera
+                        </button>
+                    </div>
+
+                    <!-- IMAGE UPLOAD CONTROLS -->
+                    <div class="control-group" id="imageControlsGroup" style="display: none;">
+                        <label class="btn btn-primary upload-btn">
+                            <i class="fa-solid fa-file-image"></i> Choose Photo to Test
+                            <input type="file" id="imageFileInput" accept="image/*" onchange="handleImageUpload(event)" style="display:none;">
+                        </label>
+                    </div>
+
+                    <div class="control-group right-aligned">
+                        <button class="btn btn-accent" onclick="triggerManualCapture()">
+                            <i class="fa-solid fa-camera-retro"></i> Capture Photo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- SETTINGS & THRESHOLDS PANEL -->
+                <div class="settings-panel">
+                    <div class="setting-item">
+                        <label for="confSlider">
+                            <i class="fa-solid fa-sliders"></i> Confidence Threshold: <span id="confValue" class="accent-text">25%</span>
+                        </label>
+                        <input type="range" id="confSlider" min="10" max="90" value="25" oninput="updateConfSlider(this.value)">
+                    </div>
+
+                    <div class="setting-item toggle-item">
+                        <label for="autoCaptureToggle">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Auto Picture Capture
+                        </label>
+                        <label class="switch">
+                            <input type="checkbox" id="autoCaptureToggle">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- RIGHT COLUMN: CAPTURED GALLERY & PLATE INSPECTOR -->
+            <section class="gallery-section glass-card">
+                <div class="gallery-header">
+                    <div class="gallery-title">
+                        <h2><i class="fa-solid fa-images"></i> CAPTURED SNAPSHOTS</h2>
+                        <span class="gallery-count-badge" id="galleryCountBadge">0 Captured</span>
+                    </div>
+                    <div class="gallery-actions">
+                        <button class="btn-icon danger" onclick="clearAllSnapshots()" title="Clear Gallery">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CAPTURED ITEMS SCROLL CONTAINER -->
+                <div class="gallery-container" id="galleryContainer">
+                    <!-- EMPTY STATE -->
+                    <div class="empty-gallery-state" id="emptyState">
+                        <i class="fa-solid fa-car-burst"></i>
+                        <p>No vehicles captured yet.</p>
+                        <span>Start stream or camera feed to automatically capture cars & plates.</span>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- MODAL FOR DETAILED SNAPSHOT VIEW -->
+    <div class="modal-backdrop" id="snapshotModal" onclick="closeModal(event)">
+        <div class="modal-card glass-card" onclick="event.stopPropagation()">
+            <button class="modal-close-btn" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="modal-title"><i class="fa-solid fa-id-card"></i> Vehicle & License Details</h3>
+            
+            <div class="modal-body">
+                <div class="modal-image-box">
+                    <h4><i class="fa-solid fa-car"></i> Vehicle Snapshot</h4>
+                    <img id="modalCarImg" src="" alt="Car Image">
+                </div>
+                <div class="modal-image-box">
+                    <h4><i class="fa-solid fa-rectangle-ad"></i> Zoomed License Plate</h4>
+                    <img id="modalPlateImg" src="" alt="Plate Crop">
+                    <div class="plate-text-display" id="modalPlateText">---</div>
+                </div>
+            </div>
+
+            <div class="modal-meta">
+                <div><strong>Captured At:</strong> <span id="modalTimestamp"></span></div>
+                <div><strong>Confidence:</strong> Car <span id="modalCarConf"></span>%, Plate <span id="modalPlateConf"></span>%</div>
+            </div>
+
+            <div class="modal-footer">
+                <a id="modalDownloadCar" download class="btn btn-primary"><i class="fa-solid fa-download"></i> Download Car Photo</a>
+                <a id="modalDownloadPlate" download class="btn btn-secondary"><i class="fa-solid fa-download"></i> Download Plate Photo</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS Scripts -->
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=2"></script>
+</body>
+</html>
