@@ -487,4 +487,4 @@ def stream_sample_file():
 
 if __name__ == '__main__':
     print("Starting Flask AI Vehicle & Plate Capture Server on http://127.0.0.1:5000")
-    app.run(host='127.0.0.1', port=5000, debug=False, threaded=True)
+    app.run(host='0.0.0.0', debug=True, threaded=True)
