@@ -1,8 +1,17 @@
 import os
+os.environ['YOLO_CONFIG_DIR'] = '/tmp/Ultralytics'
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+
 import cv2
 import time
 import base64
+import gc
 import numpy as np
+import torch
+
+torch.set_num_threads(1)
+
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_from_directory, Response
 from ultralytics import YOLO
@@ -23,15 +32,19 @@ model = YOLO(MODEL_PATH)
 CLASS_NAMES = model.names  # {0: 'car', 1: 'license'}
 print(f"Model loaded successfully. Classes: {CLASS_NAMES}")
 
-# Load EasyOCR Reader
+# Lazy-loaded EasyOCR Reader (saves ~350MB RAM at startup for Render free tier)
 ocr_reader = None
-try:
-    import easyocr
-    print("Initializing EasyOCR reader...")
-    ocr_reader = easyocr.Reader(['en'], gpu=False)
-    print("EasyOCR initialized successfully!")
-except Exception as e:
-    print(f"EasyOCR initialization warning: {e}")
+def get_ocr_reader():
+    global ocr_reader
+    if ocr_reader is None:
+        try:
+            import easyocr
+            print("Lazy initializing EasyOCR reader...")
+            ocr_reader = easyocr.Reader(['en'], gpu=False)
+            print("EasyOCR initialized successfully!")
+        except Exception as e:
+            print(f"EasyOCR initialization warning: {e}")
+    return ocr_reader
 
 # In-memory storage for captured snapshots
 snapshots_db = []
@@ -259,9 +272,10 @@ def process_detections(frame, conf_threshold=0.30, auto_capture=True):
 
         # Background thread for EasyOCR so live stream detection is never blocked
         def async_ocr_task(crop, snapshot_obj):
-            if ocr_reader is not None and crop is not None:
+            reader = get_ocr_reader()
+            if reader is not None and crop is not None:
                 try:
-                    ocr_results = ocr_reader.readtext(crop, detail=0)
+                    ocr_results = reader.readtext(crop, detail=0)
                     if ocr_results:
                         raw_text = " ".join(ocr_results).upper()
                         cleaned_text = "".join([c for c in raw_text if c.isalnum() or c in [' ', '-']]).strip()
@@ -273,6 +287,8 @@ def process_detections(frame, conf_threshold=0.30, auto_capture=True):
                         snapshot_obj['plate_text'] = "AUTO DETECTED"
                 except Exception:
                     snapshot_obj['plate_text'] = "AUTO DETECTED"
+                finally:
+                    gc.collect()
 
         threading.Thread(target=async_ocr_task, args=(plate_crop.copy(), captured_data), daemon=True).start()
 
@@ -486,5 +502,6 @@ def stream_sample_file():
     return send_from_directory(BASE_DIR, "1900-151662242_large.mp4", mimetype="video/mp4")
 
 if __name__ == '__main__':
-    print("Starting Flask AI Vehicle & Plate Capture Server on http://127.0.0.1:5000")
-    app.run(host='0.0.0.0', debug=True, threaded=True)
+    port = int(os.environ.get("PORT", 5000))
+    print(f"Starting Flask AI Vehicle & Plate Capture Server on 0.0.0.0:{port}")
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
